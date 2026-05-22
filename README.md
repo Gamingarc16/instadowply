@@ -1,4 +1,4 @@
-# com.shi.instadowply
+# Instadowply
 An app to download and watch instagram reels offline
 
 # INSTALL
