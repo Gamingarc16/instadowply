@@ -11,8 +11,9 @@ or
 https://github.com/termux/termux-app/releases
 
 ```
+pkg install nodejs python x14-repo tur-repo -y
 pkg update && pkg upgrade -y
-pkg install nodejs python x14-repo tur-repo build-essential binutils pango cairo libxi libxtst libxcomposite libxdamage alsa-lib nss freetype fontconfig chromium curl -y
+pkg install build-essential binutils pango cairo libxi libxtst libxcomposite libxdamage alsa-lib nss freetype fontconfig chromium curl -y
 termux-setup-storage
 mkdir insta-bulk-grabber
 cd insta-bulk-grabber
@@ -51,3 +52,5 @@ Save and Exit (Ctrl+S , Ctrl +X)
 Dont know how to add souce code of the app so i didnt lol whatever
 # USE THIS AT YOUR OWN RISK
 *Fixed a bug in the script in which the reels tab get stuck in 10-12 count
+*Improved download speed and added asynchronous downloads.
+
