@@ -23,7 +23,7 @@ const HISTORY_FILE = path.join(__dirname, 'history.json'); //[cite: 1]
 const DOWNLOAD_FOLDER = '/storage/emulated/0/Reels'; //[cite: 1]
 
 const TARGET_DOWNLOAD_COUNT = 600; //[cite: 1]
-const MAX_HISTORY_SIZE = 8000; //[cite: 1]
+const MAX_HISTORY_SIZE = 15000; //[cite: 1]
 
 if (!fs.existsSync(DOWNLOAD_FOLDER)) {
     fs.mkdirSync(DOWNLOAD_FOLDER, { recursive: true }); //[cite: 1]
