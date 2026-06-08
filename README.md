@@ -36,7 +36,7 @@ chmod +x ~/setup_grabber.sh
 ~/insta-bulk-grabber/configure.sh
 ```
 
-* You can get the Session ID from signing in to instagram in [Kiwi Browser](https://play.google.com/store/apps/details?id=secure.unblock.unlimited.proxy.snap.hotspot.shield)and using cookie editor extension or by using a pc and finding it manually.
+* You can get the Session ID from signing in to instagram in [Kiwi Browser](https://play.google.com/store/apps/details?id=secure.unblock.unlimited.proxy.snap.hotspot.shield) and using cookie editor extension or by using a pc and finding it manually.
 
 # USE THIS WITH CAUTION 
  * Try to use a alt/spare/burner account for this script just for safety, Don't use your main account.
