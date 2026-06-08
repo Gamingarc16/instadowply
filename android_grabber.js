@@ -43,7 +43,7 @@ const cleanupAndExit = () => {
 process.on('SIGINT', cleanupAndExit);
 process.on('SIGTERM', cleanupAndExit);
 
-const TARGET_DOWNLOAD_COUNT = 600;
+const TARGET_DOWNLOAD_COUNT = 100;
 const MAX_HISTORY_SIZE = 15000;
 
 if (!fs.existsSync(DOWNLOAD_FOLDER)) {
