@@ -27,50 +27,16 @@ or
 
 In Termux run these commands
 ```
-pkg install nodejs python x14-repo tur-repo -y
-pkg update && pkg upgrade -y
-pkg install build-essential binutils pango cairo libxi libxtst libxcomposite libxdamage alsa-lib nss freetype fontconfig chromium curl -y
-termux-setup-storage
-mkdir insta-bulk-grabber
-cd insta-bulk-grabber
-curl -o android_grabber.js https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/android_grabber.js
-curl -o cookies.json https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/cookies.json
-curl -o package.json https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/package.json
-curl -o configure.sh https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/configure.sh
-chmod +x ~/insta-bulk-grabber/configure.sh
-PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install playwright axios
+curl -o setup_grabber.sh 
+chmod +x ~/setup_grabber.sh
+~/setup_grabber.sh
 ```
-* You can add your Session Id and download count (how many reels to download in one session) using 
+* You can add your Session Id and download count (how many reels to download in one session)later, you can use 
 ```
 ~/insta-bulk-grabber/configure.sh
 ```
 
 * You can get the Session ID from signing in to instagram in kiwi browser and using cookie editor extension or by using a pc and finding it manually.
-
-# Additional Setup
-↓This is needed for the in-app button 
-<img width="54" height="51" alt="1000044073" src="https://github.com/user-attachments/assets/6ee4940d-f7c8-4430-bd87-7b14b4614bbc" />
-It Turn on the download script.
-
-(NOTE: it will make the script run every time you open Termux)
-
-```
-nano $PREFIX/etc/bash.bashrc
-```
-↓Then add these line of codes after the last lines
-```
-clear                                                                 
-echo "=== Engine Booted ==="         
-cd ~/insta-bulk-grabber
-node android_grabber.js & 
-NODE_PID=$!
-sleep 0.5
-echo "Snapping back to InstaDowply..."
-am start -n com.shi.instadowply/com.shi.instadowply.MainActivity
-wait $NODE_PID
-exit
-```
-Save and Exit (Ctrl+S , Ctrl +X)
 
 # USE THIS WITH CAUTION 
  * Try to use a alt/spare/burner account for this script just for safety, Don't use your main account.
