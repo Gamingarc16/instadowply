@@ -25,6 +25,7 @@ or
 
 [GitHub](https://github.com/termux/termux-app/releases)
 
+In Termux run these commands
 ```
 pkg install nodejs python x14-repo tur-repo -y
 pkg update && pkg upgrade -y
