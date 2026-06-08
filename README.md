@@ -45,7 +45,8 @@ You can get the Session ID from signing in to instagram in kiwi browser and usin
 ```
 nano ~/insta-bulk-grabber/cookies.json
 ```
-↓This is needed for the in-app button <img width="100" height="94" alt="1000044057" src="https://github.com/user-attachments/assets/dc02056a-8423-4a8b-86cf-e38536f9cb75" />
+↓This is needed for the in-app button 
+<img width="54" height="51" alt="1000044073" src="https://github.com/user-attachments/assets/6ee4940d-f7c8-4430-bd87-7b14b4614bbc" />
 
  (NOTE: it will make the script run every time you open Termux)
 
