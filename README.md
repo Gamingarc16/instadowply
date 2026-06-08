@@ -47,8 +47,9 @@ nano ~/insta-bulk-grabber/cookies.json
 ```
 ↓This is needed for the in-app button 
 <img width="54" height="51" alt="1000044073" src="https://github.com/user-attachments/assets/6ee4940d-f7c8-4430-bd87-7b14b4614bbc" />
+It Turn on the download script.
 
- (NOTE: it will make the script run every time you open Termux)
+(NOTE: it will make the script run every time you open Termux)
 
 ```
 nano $PREFIX/etc/bash.bashrc
