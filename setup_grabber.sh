@@ -34,9 +34,27 @@ chmod +x ~/insta-bulk-grabber/configure.sh
 echo "Installing Node packages (Skipping heavy browser bundle)..."
 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install playwright axios
 
-# 7. Append the boot routine to bash.bashrc so it runs automatically on every Termux launch
-echo "Injecting boot routine into Termux start scripts..."
-cat << 'BASHRC_EOF' >> $PREFIX/etc/bash.bashrc
+# 7. Dynamic Warning Prompt before modifying bash.bashrc
+echo ""
+echo "⚠️  CRITICAL WARNING: TERMUX AUTOMATION SETUP ⚠️"
+echo "--------------------------------------------------------"
+echo "This step injects the startup script directly into Termux."
+echo "Every single time you open Termux, it will automatically"
+echo "launch the grabber and try to snap back to the app."
+echo ""
+echo "👉 ONLY PROCEED IF:"
+echo "1. You do not plan to use Termux for anything else, OR"
+echo "2. You are comfortable pressing 'Ctrl + C' quickly every"
+echo "   time Termux opens to stop the script manually."
+echo ""
+echo "⚠️ NOTE: If you skip this part, the 'Start Script' button"
+echo "   inside the InstaDowply app WILL NOT work."
+echo "--------------------------------------------------------"
+read -p "Do you want to enable this auto-start feature? (y/n): " confirm_boot
+
+if [[ "$confirm_boot" =~ ^[Yy]$ ]]; then
+    echo "Injecting boot routine into Termux start scripts..."
+    cat << 'BASHRC_EOF' >> $PREFIX/etc/bash.bashrc
 
 # --- Insta-Bulk-Grabber Automation ---
 clear                                                                    
@@ -50,6 +68,12 @@ am start -n com.shi.instadowply/com.shi.instadowply.MainActivity
 wait $NODE_PID
 exit
 BASHRC_EOF
+    echo "✅ Auto-start configuration successfully added to bash.bashrc."
+else
+    echo "⏭️  Skipped auto-start configuration. Your bash.bashrc was left untouched."
+fi
+
+echo ""
 
 # 8. Fire up the configuration script right at the end of the installation
 echo "Running initial configuration sequence..."
