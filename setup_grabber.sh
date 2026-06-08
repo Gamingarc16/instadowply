@@ -7,11 +7,14 @@ echo "============================================="
 # 1. Update and install repository extensions
 echo "Updating packages and setting up additional repos..."
 pkg update && pkg upgrade -y
-pkg install nodejs python x11-repo tur-repo -y
+pkg install nodejs python x11-repo tur-repo curl -y
 
-# 2. Install all system dependencies and Chromium
+# 2. Install all system dependencies and Chromium (Corrected for Termux)
 echo "Installing build essentials and system UI libraries..."
-pkg install build-essential binutils pango cairo libxi libxtst libxcomposite libxdamage alsa-lib nss freetype fontconfig chromium curl -y
+pkg install build-essential binutils freetype fontconfig chromium -y
+
+# Install the specific X11/graphics libraries with proper Termux naming
+pkg install libcairo libpango libxi libxtst libxcomposite libxdamage alsa-lib -y
 
 # 3. Request storage access if not already granted
 echo "Requesting storage permissions..."
