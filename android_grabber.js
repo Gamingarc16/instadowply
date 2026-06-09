@@ -1,5 +1,6 @@
 // 🔥 FORCE PLAYWRIGHT TO THINK THIS IS LINUX
 Object.defineProperty(process, 'platform', { value: 'linux' });
+
 // ============================================================================
 // SAFE PIPELINE CORES (Silently absorb background media or asset timeout drops)
 // ============================================================================
@@ -43,7 +44,7 @@ const cleanupAndExit = () => {
 process.on('SIGINT', cleanupAndExit);
 process.on('SIGTERM', cleanupAndExit);
 
-const TARGET_DOWNLOAD_COUNT = 100;
+const TARGET_DOWNLOAD_COUNT = 400;
 const MAX_HISTORY_SIZE = 15000;
 
 if (!fs.existsSync(DOWNLOAD_FOLDER)) {
@@ -77,13 +78,138 @@ function saveToHistory(videoId) {
 }
 
 // ============================================================================
-// NON-BLOCKING ASYNC DOWNLOAD WORKER (WITH LOCK-FILE STATE PIPELINE)
+// LIKE SYNC ENGINE (Decodes raw long IDs and executes native finger-taps)
+// ============================================================================
+async function processPlayerLikes(page) {
+    const LIKES_FILE = path.join(DOWNLOAD_FOLDER, 'pending_likes.json');
+    if (!fs.existsSync(LIKES_FILE)) return;
+
+    try {
+        const fileContent = fs.readFileSync(LIKES_FILE, 'utf8');
+        let pendingIds = [];
+        try {
+            pendingIds = JSON.parse(fileContent);
+        } catch (jsonErr) {
+            return;
+        }
+
+        if (!Array.isArray(pendingIds) || pendingIds.length === 0) return;
+
+        console.log(`\n❤️ Found ${pendingIds.length} pending Likes shared from Player App. Processing Priority Queue...`);
+
+        for (const id of pendingIds) {
+            let targetShortcode = id;
+
+            // Mathematical Base64 shortcode resolution for raw internal long IDs
+            if (/^\d+(_\d+)?$/.test(id)) {
+                const mediaIdStr = id.split('_')[0];
+                try {
+                    let num = BigInt(mediaIdStr);
+                    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+                    let buildCode = '';
+                    while (num > 0n) {
+                        let remainder = num % 64n;
+                        buildCode = alphabet[Number(remainder)] + buildCode;
+                        num = num / 64n;
+                    }
+                    targetShortcode = buildCode;
+                } catch (err) {
+                    targetShortcode = id;
+                }
+            }
+
+            console.log(`  -> Automated targeting for Reel ID: ${id} (Resolved Shortcode: ${targetShortcode})`);
+            try {
+                await page.goto(`https://www.instagram.com/reels/${targetShortcode}/`, { 
+                    waitUntil: 'domcontentloaded', 
+                    timeout: 20000 
+                });
+                
+                await page.waitForTimeout(4000); // Allow mobile layouts to fully settle
+
+                // Safeguard: Check if already liked to prevent accidentally toggling it back off
+                const alreadyLiked = await page.$('button:has(svg[aria-label="Unlike"]), svg[aria-label="Unlike"], [aria-label="Unlike"]').catch(() => null);
+                if (alreadyLiked) {
+                    console.log(`     ℹ️ Reel is already liked. Skipping to avoid toggle-off.`);
+                    continue;
+                }
+
+                let interactionSuccess = false;
+
+                // TIER 1: Find physical Like Button & execute true Native Mobile Touch Tap
+                const heartBtn = await page.$('button:has(svg[aria-label="Like"]), svg[aria-label="Like"], [aria-label="Like"]').catch(() => null);
+                if (heartBtn) {
+                    const box = await heartBtn.boundingBox().catch(() => null);
+                    if (box) {
+                        await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+                        console.log(`     ✅ Heart Button Native Touch-Tapped.`);
+                        interactionSuccess = true;
+                    }
+                }
+
+                // TIER 2: Double-Touch Tap gesture directly on the center of the Video Viewport
+                if (!interactionSuccess) {
+                    const videoEl = await page.$('video').catch(() => null);
+                    if (videoEl) {
+                        const box = await videoEl.boundingBox().catch(() => null);
+                        if (box) {
+                            const centerX = box.x + box.width / 2;
+                            const centerY = box.y + box.height / 2;
+                            // Fast sequential screen taps to satisfy touch gesture listeners
+                            await page.touchscreen.tap(centerX, centerY);
+                            await page.waitForTimeout(80);
+                            await page.touchscreen.tap(centerX, centerY);
+                            console.log(`     ✅ Video Viewport Double-Touch Tapped.`);
+                            interactionSuccess = true;
+                        }
+                    }
+                }
+
+                // TIER 3: Programmatic DOM-level click dispatch fallback
+                if (!interactionSuccess) {
+                    const evalRes = await page.evaluate(() => {
+                        const btn = document.querySelector('button:has(svg[aria-label="Like"])') || 
+                                    document.querySelector('svg[aria-label="Like"]')?.closest('button') || 
+                                    document.querySelector('[aria-label="Like"]');
+                        if (btn) {
+                            btn.click();
+                            return true;
+                        }
+                        return false;
+                    }).catch(() => false);
+
+                    if (evalRes) {
+                        console.log(`     ✅ JS DOM Click Dispatched to Like Button.`);
+                        interactionSuccess = true;
+                    }
+                }
+
+                if (!interactionSuccess) {
+                    console.log(`     ❌ Error: Interaction handlers could not locate target structures.`);
+                }
+
+                await page.waitForTimeout(2000);
+            } catch (err) {
+                console.log(`     ❌ Link unavailable or skipped: ${err.message}`);
+            }
+        }
+
+        fs.writeFileSync(LIKES_FILE, JSON.stringify([]), 'utf8');
+        console.log('❤️ Priority Likes sync sequence finalized.\n');
+    } catch (e) {
+        console.log('⚠️ Notice processing sync pipeline:', e.message);
+    }
+}
+
+// ============================================================================
+// NON-BLOCKING ASYNC DOWNLOAD WORKER (CLEAN PIPELINE WITHOUT JITTER)
 // ============================================================================
 async function processDownloadQueue() {
     if (isDownloading || downloadQueue.length === 0 || downloadCount >= TARGET_DOWNLOAD_COUNT) {
         if (downloadQueue.length === 0 && !isDownloading) {
             try { if (fs.existsSync(LOCK_FILE_PATH)) fs.unlinkSync(LOCK_FILE_PATH); } catch(e){}
         }
+        setTimeout(processDownloadQueue, 500);
         return;
     }
     
@@ -113,16 +239,7 @@ async function processDownloadQueue() {
         const writer = fs.createWriteStream(filePath);
         
         await new Promise((resolve) => {
-            response.data.on('data', async (chunk) => {
-                writer.write(chunk);
-                if (Math.random() > 0.7) {
-                    await new Promise(r => setTimeout(r, Math.floor(Math.random() * 50) + 10));
-                }
-            });
-
-            response.data.on('end', () => {
-                writer.end();
-            });
+            response.data.pipe(writer);
 
             writer.on('finish', () => {
                 downloadCount++;
@@ -135,29 +252,24 @@ async function processDownloadQueue() {
                 resolve();
             });
 
-            response.data.on('error', (err) => {
+            const handleFailure = () => {
                 writer.end();
-                fs.unlink(filePath, () => {});
+                try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e){}
                 if (downloadQueue.length === 0) {
                     try { if (fs.existsSync(LOCK_FILE_PATH)) fs.unlinkSync(LOCK_FILE_PATH); } catch(e){}
                 }
                 resolve();
-            });
-            
-            writer.on('error', () => {
-                fs.unlink(filePath, () => {});
-                if (downloadQueue.length === 0) {
-                    try { if (fs.existsSync(LOCK_FILE_PATH)) fs.unlinkSync(LOCK_FILE_PATH); } catch(e){}
-                }
-                resolve();
-            });
+            };
+
+            response.data.on('error', handleFailure);
+            writer.on('error', handleFailure);
         });
     } catch (error) {
         // Fail silently and keep processing queue forward
     }
 
     isDownloading = false;
-    setTimeout(processDownloadQueue, Math.floor(Math.random() * 400) + 200);
+    setTimeout(processDownloadQueue, 300);
 }
 
 function findVideoUrls(obj, foundLinks = []) {
@@ -207,32 +319,10 @@ function findVideoUrls(obj, foundLinks = []) {
         console.log('Successfully injected authenticated session cookies.');
     } else {
         console.error('CRITICAL ERROR: cookies.json is missing!');
+        process.exit(1);
     }
 
     const page = await context.newPage();
-
-    page.on('response', async (response) => {
-        const url = response.url();
-        if (url.includes('/api/v1/clips/home/') || url.includes('graphql/query')) {
-            try {
-                const json = await response.json();
-                const targets = findVideoUrls(json);
-                for (const target of targets) {
-                    if (downloadCount >= TARGET_DOWNLOAD_COUNT) break;
-                    
-                    if (downloadedVideoIds.includes(target.id)) continue;
-
-                    if (!downloadQueue.some(item => item.id === target.id)) {
-                        console.log(`[QUEUE] Intercepted NEW Reel ID: ${target.id}`);
-                        downloadQueue.push(target);
-                        processDownloadQueue(); 
-                    }
-                }
-            } catch (e) {
-                // Ignore parsing errors
-            }
-        }
-    });
 
     try {
         console.log('Navigating directly to Reels target area...');
@@ -253,6 +343,33 @@ function findVideoUrls(obj, foundLinks = []) {
         process.exit(1);
     }
 
+    // 1️⃣ Run the touch-native interaction priority queue first
+    await processPlayerLikes(page);
+
+    // 2️⃣ Spin up the single instance non-blocking background downloader loop
+    processDownloadQueue();
+
+    page.on('response', async (response) => {
+        const url = response.url();
+        const contentType = response.headers()['content-type'] || '';
+        
+        if ((url.includes('/api/v1/clips/home/') || url.includes('graphql/query')) && contentType.includes('json')) {
+            try {
+                const json = await response.json();
+                const targets = findVideoUrls(json);
+                for (const target of targets) {
+                    if (downloadCount >= TARGET_DOWNLOAD_COUNT) break;
+                    if (downloadedVideoIds.includes(target.id)) continue;
+
+                    if (!downloadQueue.some(item => item.id === target.id)) {
+                        console.log(`[QUEUE] Intercepted NEW Reel ID: ${target.id}`);
+                        downloadQueue.push(target);
+                    }
+                }
+            } catch (e) {}
+        }
+    });
+
     console.log('Connected to Algorithmic Feed Stream. Beginning automatic crawl loop...');
 
     let lastDownloadCount = 0;
@@ -260,6 +377,24 @@ function findVideoUrls(obj, foundLinks = []) {
 
     while (downloadCount < TARGET_DOWNLOAD_COUNT) {
         
+        if (downloadQueue.length > 20) {
+            console.log(`\n🛑 [QUEUE THRESHOLD EXCEEDED] Queue is at ${downloadQueue.length}. Pausing player view to protect feed integrity...`);
+            
+            try {
+                // Perform a short tap on the visual canvas to pause media playback safely
+                await page.touchscreen.tap(195, 400);
+            } catch (err) {}
+
+            while (downloadQueue.length > 5) {
+                await page.waitForTimeout(1000);
+            }
+
+            console.log('▶️ [QUEUE CLEAR] Backlog cleared below threshold safety limit. Resuming feed engine...\n');
+            try {
+                await page.touchscreen.tap(195, 400);
+            } catch (err) {}
+        }
+
         if (downloadCount > 0 && downloadCount % 20 === 0) {
             const randomNapTime = Math.floor(Math.random() * 4000) + 2000;
             console.log(`\n☕ [HUMAN BREAK] Simulating stepping away for ${Math.round(randomNapTime/1000)}s...`);
@@ -303,13 +438,8 @@ function findVideoUrls(obj, foundLinks = []) {
 
                 console.log('⚠️  [STUCK SEGMENT] Container tracking lost. Re-focusing viewport elements...');
                 try {
-                    const focusX = 195 + Math.floor(Math.random() * 20 - 10);
-                    const focusY = 400 + Math.floor(Math.random() * 20 - 10);
-                    await page.mouse.click(focusX, focusY);
+                    await page.touchscreen.tap(195, 400);
                     await page.waitForTimeout(400);
-
-                    await page.keyboard.press('ArrowDown');
-                    console.log('     -> Sent native viewport snap signal (ArrowDown).');
                     
                     await page.evaluate(() => {
                         const mainContainer = document.querySelector('main') || window;
@@ -336,7 +466,7 @@ function findVideoUrls(obj, foundLinks = []) {
                 const jitterX = 195 + Math.floor(Math.random() * 40 - 20);
                 const jitterY = 422 + Math.floor(Math.random() * 40 - 20);
                 
-                await page.mouse.click(jitterX, jitterY);
+                await page.touchscreen.tap(jitterX, jitterY);
                 await page.waitForTimeout(Math.floor(Math.random() * 1500) + 1000);
                 
                 await page.evaluate(() => window.scrollBy(0, 120));
@@ -345,7 +475,7 @@ function findVideoUrls(obj, foundLinks = []) {
                 await page.evaluate(() => window.scrollBy(0, -120));
                 await page.waitForTimeout(Math.floor(Math.random() * 1000) + 1000);
                 
-                await page.mouse.click(jitterX, jitterY);
+                await page.touchscreen.tap(jitterX, jitterY);
             } catch (err) {}
             viewDelay = Math.floor(Math.random() * 2000) + 2000;
 
@@ -373,7 +503,7 @@ function findVideoUrls(obj, foundLinks = []) {
                 const profileHandleX = 65 + Math.floor(Math.random() * 30 - 15);
                 const profileHandleY = 745 + Math.floor(Math.random() * 20 - 10);
                 
-                await page.mouse.click(profileHandleX, profileHandleY);
+                await page.touchscreen.tap(profileHandleX, profileHandleY);
                 console.log('     -> Navigating away from main feed to examine profile grid details...');
                 
                 await page.waitForTimeout(Math.floor(Math.random() * 3000) + 4000);
