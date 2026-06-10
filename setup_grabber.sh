@@ -33,7 +33,7 @@ curl -o Update.sh https://raw.githubusercontent.com/Gamingarc16/instadowply/refs
 
 # 5. Set appropriate permissions
 chmod +x ~/insta-bulk-grabber/configure.sh
-chmod +x ~/insta-bulk-grabber/update.sh
+chmod +x ~/insta-bulk-grabber/Update.sh
 
 # 6. Install Node modules with Playwright adjustments
 echo "Installing Node packages (Skipping heavy browser bundle)..."
