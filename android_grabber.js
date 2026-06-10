@@ -40,7 +40,6 @@ const cleanupAndExit = () => {
     process.exit(0);
 };
 
-// Catch Ctrl+C and system termination events
 process.on('SIGINT', cleanupAndExit);
 process.on('SIGTERM', cleanupAndExit);
 
@@ -87,11 +86,7 @@ async function processPlayerLikes(page) {
     try {
         const fileContent = fs.readFileSync(LIKES_FILE, 'utf8');
         let pendingIds = [];
-        try {
-            pendingIds = JSON.parse(fileContent);
-        } catch (jsonErr) {
-            return;
-        }
+        try { pendingIds = JSON.parse(fileContent); } catch (jsonErr) { return; }
 
         if (!Array.isArray(pendingIds) || pendingIds.length === 0) return;
 
@@ -100,7 +95,6 @@ async function processPlayerLikes(page) {
         for (const id of pendingIds) {
             let targetShortcode = id;
 
-            // Mathematical Base64 shortcode resolution for raw internal long IDs
             if (/^\d+(_\d+)?$/.test(id)) {
                 const mediaIdStr = id.split('_')[0];
                 try {
@@ -120,16 +114,14 @@ async function processPlayerLikes(page) {
 
             console.log(`  -> Automated targeting for Reel ID: ${id} (Resolved Shortcode: ${targetShortcode})`);
             try {
-                // Optimized to domcontentloaded to handle heavy network pages smoothly
                 await page.goto(`https://www.instagram.com/reels/${targetShortcode}/`, { 
                     waitUntil: 'domcontentloaded', 
                     timeout: 30000 
                 });
                 
-                await page.waitForTimeout(5000); // Allow elements to materialize completely
+                await page.waitForTimeout(5000);
                 console.log(`     [DIAGNOSTIC] Viewport directed location: ${page.url()}`);
 
-                // 1️⃣ INTERSTITIAL SCRUBBER: Kill full screen blocking modals or app promotion walls
                 await page.evaluate(() => {
                     document.body.style.overflow = 'auto';
                     document.body.style.pointerEvents = 'auto';
@@ -150,7 +142,7 @@ async function processPlayerLikes(page) {
                                         b.click();
                                     }
                                 });
-                                el.remove(); // Drop structural layout barrier entirely
+                                el.remove();
                             }
                         }
                     });
@@ -158,7 +150,6 @@ async function processPlayerLikes(page) {
 
                 await page.waitForTimeout(1000);
 
-                // 2️⃣ SAFETY CHECK: Evaluate current Like alignment configuration state
                 const currentStatus = await page.evaluate(() => {
                     const allSvgs = Array.from(document.querySelectorAll('svg'));
                     const isUnlikedAlready = allSvgs.some(s => /unlike/i.test(s.getAttribute('aria-label') || ''));
@@ -170,7 +161,6 @@ async function processPlayerLikes(page) {
                     continue;
                 }
 
-                // 3️⃣ DOM EVENT DISPATCH MATRIX: Fire trusted event tree up ancestor layers
                 const likeDispatched = await page.evaluate(() => {
                     const allSvgs = Array.from(document.querySelectorAll('svg'));
                     let matchIcon = allSvgs.find(svg => {
@@ -188,8 +178,12 @@ async function processPlayerLikes(page) {
                     coreTarget.scrollIntoView({ block: 'center' });
 
                     const rect = coreTarget.getBoundingClientRect();
-                    const x = rect.left + rect.width / 2;
-                    const y = rect.top + rect.height / 2;
+                    const baseX = rect.left + rect.width / 2;
+                    const baseY = rect.top + rect.height / 2;
+
+                    // 🔥 FIX 1: Introduce randomized micro-jitter (-4px to +4px) so clicks aren't pixel-perfect center hits
+                    const jitterX = baseX + (Math.floor(Math.random() * 9) - 4);
+                    const jitterY = baseY + (Math.floor(Math.random() * 9) - 4);
 
                     const eventSequence = ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'];
                     
@@ -199,10 +193,10 @@ async function processPlayerLikes(page) {
                         
                         eventSequence.forEach(evtName => {
                             let simulatedEvt;
-                            const standardConfig = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y };
+                            const standardConfig = { bubbles: true, cancelable: true, view: window, clientX: jitterX, clientY: jitterY };
                             
                             if (evtName.startsWith('touch')) {
-                                const singleTouch = new Touch({ identifier: Date.now(), target: executionLayer, clientX: x, clientY: y });
+                                const singleTouch = new Touch({ identifier: Date.now(), target: executionLayer, clientX: jitterX, clientY: jitterY });
                                 simulatedEvt = new TouchEvent(evtName, { bubbles: true, cancelable: true, touches: [singleTouch], targetTouches: [singleTouch], changedTouches: [singleTouch] });
                             } else if (evtName.startsWith('pointer')) {
                                 simulatedEvt = new PointerEvent(evtName, standardConfig);
@@ -223,28 +217,29 @@ async function processPlayerLikes(page) {
                 if (likeDispatched) {
                     console.log(`     ✅ Complete Event Dispatch Matrix injected into Like element layers.`);
                 } else {
-                    // Fallback Tier: True mobile layout native touchscreen coordinates click via browser driver
                     const heartBtn = await page.$('button:has(svg[aria-label="Like"]), svg[aria-label="Like"], [aria-label="Like"]').catch(() => null);
                     if (heartBtn) {
                         const box = await heartBtn.boundingBox().catch(() => null);
                         if (box) {
-                            await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
-                            console.log(`     ✅ Playwright Native Touchscreen Tap Fallback deployed.`);
-                        } else {
-                            console.log(`     ❌ Error: Interaction coordinates calculation collapsed.`);
+                            // 🔥 FIX 1 (Fallback): Apply jitter to the native fallback tap coordinates as well
+                            const nativeJitterX = (box.x + box.width / 2) + (Math.floor(Math.random() * 7) - 3);
+                            const nativeJitterY = (box.y + box.height / 2) + (Math.floor(Math.random() * 7) - 3);
+                            
+                            await page.touchscreen.tap(nativeJitterX, nativeJitterY);
+                            console.log(`     ✅ Playwright Native Jittered Touchscreen Tap Fallback deployed.`);
                         }
-                    } else {
-                        console.log(`     ❌ Error: Target Like structural layout elements completely absent.`);
                     }
                 }
 
-                await page.waitForTimeout(4000); // Allow sufficient buffer loop to flush network socket queues
+                // 🔥 FIX 2: Dynamic human-like cooldown delays instead of a hardcoded 4 seconds
+                const postLikeDelay = Math.floor(Math.random() * 4000) + 3500; // Generates 3.5s to 7.5s variance
+                console.log(`     ⏳ Sleeping ${Math.round(postLikeDelay / 1000)}s to mask priority profile navigation behavior...`);
+                await page.waitForTimeout(postLikeDelay);
             } catch (err) {
                 console.log(`     ❌ Link unavailable or skipped: ${err.message}`);
             }
         }
 
-        // Wipe priority sync cache file completely
         fs.writeFileSync(LIKES_FILE, JSON.stringify([]), 'utf8');
         console.log('🔄 Returning browser context back to main Reels stream feed...');
         await page.goto('https://www.instagram.com/reels/', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
@@ -276,9 +271,39 @@ async function processDownloadQueue() {
 
     const task = downloadQueue.shift();
     const filePath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.mp4`);
-    const captionPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.txt`); // Restored!
+    const captionPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.txt`);
 
     try {
+    	
+    const task = downloadQueue.shift();
+    const filePath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.mp4`);
+    const captionPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.txt`);
+    
+    // NEW: Paths for the PFP and Username
+    const pfpPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.jpg`);
+    const userPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}_user.txt`);
+
+    // 1. Save Username to text file
+    if (task.username) {
+        try { fs.writeFileSync(userPath, `@${task.username}`, 'utf8'); } catch(e){}
+    }
+
+    // 2. Download PFP Image (Buffered)
+    if (task.pfpUrl) {
+        try {
+            const pfpResponse = await axios({
+                method: 'GET',
+                url: task.pfpUrl,
+                responseType: 'arraybuffer',
+                timeout: 10000
+            });
+            fs.writeFileSync(pfpPath, pfpResponse.data);
+        } catch (e) {
+            console.log(`  -> [WARN] PFP grab failed for ${task.id}`);
+        }
+    }
+
+    // ... Keep your existing try/catch block for the video download here ...
         const response = await axios({
             method: 'GET',
             url: task.url,
@@ -299,7 +324,6 @@ async function processDownloadQueue() {
                 downloadCount++;
                 saveToHistory(task.id); 
 
-                // Restored Caption Output Logic
                 if (task.caption && task.caption.trim().length > 0) {
                     try {
                         fs.writeFileSync(captionPath, task.caption, 'utf8');
@@ -326,9 +350,7 @@ async function processDownloadQueue() {
             response.data.on('error', handleFailure);
             writer.on('error', handleFailure);
         });
-    } catch (error) {
-        // Fail silently and keep processing queue forward
-    }
+    } catch (error) {}
 
     isDownloading = false;
     setTimeout(processDownloadQueue, 300);
@@ -339,8 +361,19 @@ function findVideoUrls(obj, foundLinks = []) {
     
     if (obj.video_versions && Array.isArray(obj.video_versions) && obj.video_versions.length > 0) {
         const id = obj.id || obj.pk || Math.random().toString(36).substring(7);
-        const captionText = obj.caption?.text || obj.edge_media_to_caption?.edges?.[0]?.node?.text || ''; // Restored!
-        foundLinks.push({ url: obj.video_versions[0].url, id: id, caption: captionText }); // Restored!
+        const captionText = obj.caption?.text || obj.edge_media_to_caption?.edges?.[0]?.node?.text || '';
+        
+        // Extract Username and PFP
+        const username = obj.user?.username || obj.owner?.username || 'Instagram User';
+        const pfpUrl = obj.user?.profile_pic_url || obj.owner?.profile_pic_url || '';
+        
+        foundLinks.push({ 
+            url: obj.video_versions[0].url, 
+            id: id, 
+            caption: captionText,
+            username: username,
+            pfpUrl: pfpUrl
+        });
     }
     
     for (const key in obj) {
@@ -349,6 +382,52 @@ function findVideoUrls(obj, foundLinks = []) {
         }
     }
     return foundLinks;
+}
+
+// ============================================================================
+// NATIVE PLAYWRIGHT INTERCEPTOR: Direct Terminal Feedback & Trusted Native Click
+// ============================================================================
+async function dismissLoginPopup(page) {
+    try {
+        const bodyText = await page.evaluate(() => document.body.innerText || "").catch(() => "");
+        const lowerText = bodyText.toLowerCase();
+
+        if (lowerText.includes("save your login info") || lowerText.includes("save info")) {
+            console.log('🚨 [INTERCEPT] "Save your login info?" overlay detected on viewport.');
+
+            const targetBtn = page.locator('button, [role="button"], div, span').filter({ hasText: /^Not now$/i }).first();
+            if (await targetBtn.isVisible()) {
+                console.log('   👉 Found target button element. Dispatching trusted hardware click...');
+                await targetBtn.click({ force: true, timeout: 3000 }).catch(() => {});
+                await page.waitForTimeout(1000);
+                return;
+            }
+
+            const looseBtn = page.locator('text=/not now/i').first();
+            if (await looseBtn.isVisible()) {
+                console.log('   👉 Found loose context text match. Executing native hit...');
+                await looseBtn.click({ force: true, timeout: 3000 }).catch(() => {});
+                await page.waitForTimeout(1000);
+                return;
+            }
+
+            const targetCoordinates = await page.evaluate(() => {
+                const elements = Array.from(document.querySelectorAll('button, [role="button"], div, span'));
+                const matched = elements.find(el => el.innerText?.toLowerCase().trim() === 'not now');
+                if (matched) {
+                    const rect = matched.getBoundingClientRect();
+                    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                }
+                return null;
+            }).catch(() => null);
+
+            if (targetCoordinates && targetCoordinates.x > 0 && targetCoordinates.y > 0) {
+                console.log(`   🎯 Geometry target fallback mapped at (${targetCoordinates.x}, ${targetCoordinates.y}). Tapping screen...`);
+                await page.touchscreen.tap(targetCoordinates.x, targetCoordinates.y).catch(() => {});
+                await page.waitForTimeout(1000);
+            }
+        }
+    } catch (e) {}
 }
 
 // ============================================================================
@@ -383,10 +462,9 @@ function findVideoUrls(obj, foundLinks = []) {
     } else {
         console.error('CRITICAL ERROR: cookies.json is missing!');
     }
-
+    
     const page = await context.newPage();
 
-    // The listener collects video items, but the download queue won't turn on until likes clear.
     page.on('response', async (response) => {
         const url = response.url();
         const contentType = response.headers()['content-type'] || '';
@@ -427,12 +505,13 @@ function findVideoUrls(obj, foundLinks = []) {
         process.exit(1);
     }
 
-    // 🔒 RUN THE LIKE SEQUENCING PROCESS FIRST IN TOTAL NET ISOLATION
     await processPlayerLikes(page);
+
+    await page.waitForTimeout(2000);
+    await dismissLoginPopup(page);
 
     console.log('Connected to Algorithmic Feed Stream. Beginning automatic crawl loop...');
 
-    // 🚀 START THE BACKGROUND DOWNLOAD WORKER NOW THAT LIKES ARE FULLY REGISTERED
     processDownloadQueue();
 
     let lastDownloadCount = 0;
@@ -440,28 +519,33 @@ function findVideoUrls(obj, foundLinks = []) {
 
     while (downloadCount < TARGET_DOWNLOAD_COUNT) {
         
-        if (downloadQueue.length > 20) {
-            console.log(`\n🛑 [QUEUE THRESHOLD EXCEEDED] Queue is at ${downloadQueue.length}. Pausing player view to protect feed integrity...`);
+        await dismissLoginPopup(page);
+        
+        if (downloadQueue.length > 30) {
+            console.log(`\n🛑 [QUEUE BACKLOG DETECTED] Backlog size: ${downloadQueue.length}. Freezing media play states...`);
             
-            try {
-                await page.touchscreen.tap(195, 400);
-            } catch (err) {}
+            // ⏸️ Force-inject a direct media element pause into the Instagram DOM container
+            await page.evaluate(() => {
+                const currentVideo = document.querySelector('video');
+                if (currentVideo && typeof currentVideo.pause === 'function') {
+                    currentVideo.pause();
+                }
+            }).catch(() => {});
 
-            while (downloadQueue.length > 5) {
+            // Hold process execution safely until your local storage handles catch up
+            while (downloadQueue.length > 10) {
                 await page.waitForTimeout(1000);
             }
 
-            console.log('▶️ [QUEUE CLEAR] Backlog cleared below threshold safety limit. Resuming feed engine...\n');
-            try {
-                await page.touchscreen.tap(195, 400);
-            } catch (err) {}
-        }
-
-        if (downloadCount > 0 && downloadCount % 20 === 0) {
-            const randomNapTime = Math.floor(Math.random() * 4000) + 2000;
-            console.log(`\n☕ [HUMAN BREAK] Simulating stepping away for ${Math.round(randomNapTime/1000)}s...`);
-            await page.waitForTimeout(randomNapTime);
-            console.log('▶️  Resuming feed stream...\n');
+            console.log('▶️ [BACKLOG RESOLVED] Buffer safe margin reached. Resuming stream playback...\n');
+            
+            // ▶️ Signal the video element to wake back up and play natively
+            await page.evaluate(() => {
+                const currentVideo = document.querySelector('video');
+                if (currentVideo && typeof currentVideo.play === 'function') {
+                    currentVideo.play();
+                }
+            }).catch(() => {});
         }
 
         try {
@@ -484,20 +568,6 @@ function findVideoUrls(obj, foundLinks = []) {
             stuckCounter++;
             
             if (stuckCounter > 2) {
-                const currentUrl = page.url();
-                
-                if (currentUrl.match(/\/reels\/[A-Za-z0-9_-]+\//)) {
-                    console.log('⚠️  [PATH CORRECTION] Trapped inside a static Reel deep link context. Steering back to main stream...');
-                    try {
-                        await page.evaluate(() => {
-                            window.location.href = 'https://www.instagram.com/reels/';
-                        });
-                        await page.waitForTimeout(4000);
-                    } catch (urlErr) {}
-                    stuckCounter = 0;
-                    continue;
-                }
-
                 console.log('⚠️  [STUCK SEGMENT] Container tracking lost. Re-focusing viewport elements...');
                 try {
                     await page.touchscreen.tap(195, 400);
@@ -567,9 +637,7 @@ function findVideoUrls(obj, foundLinks = []) {
                 
                 await page.touchscreen.tap(profileHandleX, profileHandleY);
                 console.log('     -> Navigating away from main feed to examine profile grid details...');
-                
                 await page.waitForTimeout(Math.floor(Math.random() * 3000) + 4000);
-                
                 await page.goBack({ waitUntil: 'domcontentloaded' });
                 console.log('     -> Executed native history navigation back. Returned to operational stream baseline.');
             } catch (err) {}
