@@ -46,7 +46,7 @@ Open cmd and paste these
 ```
 mkdir insta-bulk-grabber
 cd insta-bulk-grabber
-curl -o windows_grabber.js 
+curl -o windows_grabber.js https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/Windows/windows_grabber.js
 npm init -y
 npm install playwright axios
 npx playwright install chromium
