@@ -1,8 +1,8 @@
 {
   "name": "insta-bulk-grabber",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "1.4.0",
+  "description": "Instagram Bulk Reels Grabber Script",
+  "main": "android_grabber.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
