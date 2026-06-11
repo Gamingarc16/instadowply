@@ -21,21 +21,26 @@ const path = require('path');
 const CHROMIUM_PATH = '/data/data/com.termux/files/usr/bin/chromium-browser';
 const COOKIES_FILE = path.join(__dirname, 'cookies.json');
 const HISTORY_FILE = path.join(__dirname, 'history.json');
-const DOWNLOAD_FOLDER = '/storage/emulated/0/Reels';
+const QUEUE_BACKLOG_FILE = path.join(__dirname, 'queue_backlog.json'); // 📦 Persistent Queue State
+const DOWNLOAD_FOLDER = '/storage/emulated/0/.Reels'; // 🛑 Hidden directory with leading dot
 const LOCK_FILE_PATH = path.join(DOWNLOAD_FOLDER, 'download.lock');
 
 // ============================================================================
-// GRACEFUL SHUTDOWN INTERCEPTOR (Ctrl+C Cleanup)
+// GRACEFUL SHUTDOWN INTERCEPTOR (Ctrl+C Cleanup & Backlog State Save)
 // ============================================================================
 const cleanupAndExit = () => {
-    console.log('\n🛑 Script interrupted via Ctrl+C. Cleaning up lock file...');
+    console.log('\n🛑 Script interrupted via Ctrl+C. Initiating structural cache dump...');
     try {
+        if (downloadQueue.length > 0) {
+            fs.writeFileSync(QUEUE_BACKLOG_FILE, JSON.stringify(downloadQueue, null, 2), 'utf8');
+            console.log(`💾 Saved ${downloadQueue.length} pending items from memory stream to queue_backlog.json.`);
+        }
         if (fs.existsSync(LOCK_FILE_PATH)) {
             fs.unlinkSync(LOCK_FILE_PATH);
-            console.log('🗑️ download.lock successfully removed from Reels folder.');
+            console.log('🗑️ download.lock successfully removed from hidden .Reels folder.');
         }
     } catch (e) {
-        console.log('⚠️ Could not remove lock file during shutdown:', e.message);
+        console.log('⚠️ Could not complete cleanup cycle during shutdown:', e.message);
     }
     process.exit(0);
 };
@@ -45,6 +50,7 @@ process.on('SIGTERM', cleanupAndExit);
 
 const TARGET_DOWNLOAD_COUNT = 400;
 const MAX_HISTORY_SIZE = 15000;
+const MAX_CONCURRENT_DOWNLOADS = 3; // ⚡ Parallelize IO download pipelines to maximize storage write speeds
 
 if (!fs.existsSync(DOWNLOAD_FOLDER)) {
     fs.mkdirSync(DOWNLOAD_FOLDER, { recursive: true });
@@ -61,9 +67,21 @@ if (fs.existsSync(HISTORY_FILE)) {
     }
 }
 
-let downloadCount = 0;
+// Restore background un-downloaded queue backup items if they exist
 let downloadQueue = []; 
-let isDownloading = false;
+if (fs.existsSync(QUEUE_BACKLOG_FILE)) {
+    try {
+        downloadQueue = JSON.parse(fs.readFileSync(QUEUE_BACKLOG_FILE, 'utf8'));
+        console.log(`📥 Successfully restored ${downloadQueue.length} unfinished targets from queue_backlog.json`);
+        fs.unlinkSync(QUEUE_BACKLOG_FILE); 
+    } catch (e) {
+        console.log('⚠️ Queue backlog state corrupted, cleaning execution context.');
+        downloadQueue = [];
+    }
+}
+
+let downloadCount = 0;
+let activeDownloads = 0;
 
 function saveToHistory(videoId) {
     if (downloadedVideoIds.includes(videoId)) return;
@@ -229,7 +247,7 @@ async function processPlayerLikes(page) {
                     }
                 }
 
-                const postLikeDelay = Math.floor(Math.random() * 4000) + 3500; 
+                const postLikeDelay = Math.floor(Math.random() * 3000) + 3000; 
                 console.log(`     ⏳ Sleeping ${Math.round(postLikeDelay / 1000)}s to mask priority profile navigation behavior...`);
                 await page.waitForTimeout(postLikeDelay);
             } catch (err) {
@@ -247,58 +265,33 @@ async function processPlayerLikes(page) {
 }
 
 // ============================================================================
-// NON-BLOCKING ASYNC DOWNLOAD WORKER
+// SPEED-OPTIMIZED ASYNC MULTI-SLOT CONCURRENT DOWNLOAD WORKER
 // ============================================================================
-async function processDownloadQueue() {
-    if (isDownloading || downloadQueue.length === 0 || downloadCount >= TARGET_DOWNLOAD_COUNT) {
-        if (downloadQueue.length === 0 && !isDownloading) {
-            try { if (fs.existsSync(LOCK_FILE_PATH)) fs.unlinkSync(LOCK_FILE_PATH); } catch(e){}
-        }
-        setTimeout(processDownloadQueue, 500);
-        return;
-    }
-    
-    isDownloading = true;
+async function executeIndividualDownload(task) {
+    const filePath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.mp4`);
+    const captionPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.txt`);
+    const pfpPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.jpg`);
+    const userPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}_user.txt`);
 
-    try {
-        fs.writeFileSync(LOCK_FILE_PATH, 'ACTIVE', 'utf8');
-    } catch (lockError) {
-        console.log('⚠️ Storage write permission denied. Run: termux-setup-storage');
+    // 1. Save Username to text file
+    if (task.username) {
+        try { fs.writeFileSync(userPath, `@${task.username}`, 'utf8'); } catch(e){}
     }
 
+    // 2. Download PFP Image (Buffered)
+    if (task.pfpUrl) {
+        try {
+            const pfpResponse = await axios({
+                method: 'GET',
+                url: task.pfpUrl,
+                responseType: 'arraybuffer',
+                timeout: 10000
+            });
+            fs.writeFileSync(pfpPath, pfpResponse.data);
+        } catch (e) {}
+    }
+
     try {
-        const task = downloadQueue.shift();
-        if (!task) {
-            isDownloading = false;
-            setTimeout(processDownloadQueue, 300);
-            return;
-        }
-
-        const filePath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.mp4`);
-        const captionPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.txt`);
-        const pfpPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}.jpg`);
-        const userPath = path.join(DOWNLOAD_FOLDER, `reel_${task.id}_user.txt`);
-
-        // 1. Save Username to text file
-        if (task.username) {
-            try { fs.writeFileSync(userPath, `@${task.username}`, 'utf8'); } catch(e){}
-        }
-
-        // 2. Download PFP Image (Buffered)
-        if (task.pfpUrl) {
-            try {
-                const pfpResponse = await axios({
-                    method: 'GET',
-                    url: task.pfpUrl,
-                    responseType: 'arraybuffer',
-                    timeout: 10000
-                });
-                fs.writeFileSync(pfpPath, pfpResponse.data);
-            } catch (e) {
-                console.log(`  -> [WARN] PFP grab failed for ${task.id}`);
-            }
-        }
-
         const response = await axios({
             method: 'GET',
             url: task.url,
@@ -326,19 +319,12 @@ async function processDownloadQueue() {
                 }
 
                 console.log(`  -> [SAVED] Progress: ${downloadCount}/${TARGET_DOWNLOAD_COUNT} files. (Queue size: ${downloadQueue.length})`);
-                
-                if (downloadQueue.length === 0) {
-                    try { if (fs.existsSync(LOCK_FILE_PATH)) fs.unlinkSync(LOCK_FILE_PATH); } catch(e){}
-                }
                 resolve();
             });
 
             const handleFailure = () => {
                 writer.end();
                 try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e){}
-                if (downloadQueue.length === 0) {
-                    try { if (fs.existsSync(LOCK_FILE_PATH)) fs.unlinkSync(LOCK_FILE_PATH); } catch(e){}
-                }
                 resolve();
             };
 
@@ -346,8 +332,36 @@ async function processDownloadQueue() {
             writer.on('error', handleFailure);
         });
     } catch (error) {}
+}
 
-    isDownloading = false;
+async function processDownloadQueue() {
+    // If the system reaches limit bounds or finishes queue operations
+    if (downloadCount >= TARGET_DOWNLOAD_COUNT || (downloadQueue.length === 0 && activeDownloads === 0)) {
+        if (downloadQueue.length === 0 && activeDownloads === 0) {
+            try { if (fs.existsSync(LOCK_FILE_PATH)) fs.unlinkSync(LOCK_FILE_PATH); } catch(e){}
+        }
+        setTimeout(processDownloadQueue, 400);
+        return;
+    }
+
+    // Concurrently handle asynchronous operations safely decoupled from Instagram browser runtime hooks
+    while (activeDownloads < MAX_CONCURRENT_DOWNLOADS && downloadQueue.length > 0 && downloadCount < TARGET_DOWNLOAD_COUNT) {
+        const nextTask = downloadQueue.shift();
+        if (!nextTask) break;
+
+        activeDownloads++;
+        try {
+            fs.writeFileSync(LOCK_FILE_PATH, 'ACTIVE', 'utf8');
+        } catch (lockError) {}
+
+        // Fire and forget individual task block execution allocation
+        executeIndividualDownload(nextTask).then(() => {
+            activeDownloads--;
+        }).catch(() => {
+            activeDownloads--;
+        });
+    }
+
     setTimeout(processDownloadQueue, 300);
 }
 
@@ -514,11 +528,10 @@ async function dismissLoginPopup(page) {
 
     while (downloadCount < TARGET_DOWNLOAD_COUNT) {
         
-        // 🚀 WATCHDOG TIMEOUT CHECK (15 Seconds Threshold)
-        if (Date.now() - lastSuccessTime > 15000) {
-            console.log('⚠️  [STUCK DETECTED] No media progress in 15s. Running soft pipeline recovery...');
+        // 🚀 WATCHDOG TIMEOUT CHECK (45 Seconds Threshold)
+        if (Date.now() - lastSuccessTime > 45000) {
+            console.log('⚠️  [STUCK DETECTED] No media progress in 25s. Running soft pipeline recovery...');
             try {
-                // Navigate back to the home reels stream to re-initialize layout without dropping context state
                 await page.goto('https://www.instagram.com/reels/', { waitUntil: 'domcontentloaded', timeout: 30000 });
                 console.log('   -> Soft recovery completed. Stream baseline successfully synchronized.');
                 lastSuccessTime = Date.now(); 
@@ -526,13 +539,13 @@ async function dismissLoginPopup(page) {
             } catch (e) {
                 console.log('   -> Soft recovery navigation timed out, shifting layout elements manually...');
                 try { await page.evaluate(() => window.scrollTo(0, 0)); } catch(err){}
-                lastSuccessTime = Date.now(); // Postpone checking to avoid tight looping
+                lastSuccessTime = Date.now(); 
             }
         }
 
         await dismissLoginPopup(page);
         
-        if (downloadQueue.length > 30) {
+        if (downloadQueue.length > 40) { // Bumped safe margin barrier to accommodate parallelized downloader throughput
             console.log(`\n🛑 [QUEUE BACKLOG DETECTED] Backlog size: ${downloadQueue.length}. Freezing media play states...`);
             
             await page.evaluate(() => {
@@ -591,11 +604,11 @@ async function dismissLoginPopup(page) {
         } else {
             stuckCounter = 0;
             lastDownloadCount = downloadCount;
-            lastSuccessTime = Date.now(); // 🚀 RESET WATCHDOG ON SUCCESSFUL MEDIA CAPTURE
+            lastSuccessTime = Date.now(); 
         }
         
         const behavioralRoll = Math.random();
-        let viewDelay = Math.floor(Math.random() * 2500) + 3500; 
+        let viewDelay = Math.floor(Math.random() * 2500) + 2200; 
         
         if (behavioralRoll < 0.20) {
             viewDelay = Math.floor(Math.random() * 800) + 1200;
@@ -656,7 +669,7 @@ async function dismissLoginPopup(page) {
         await page.waitForTimeout(viewDelay);
     }
 
-    while(downloadQueue.length > 0 || isDownloading) {
+    while(downloadQueue.length > 0 || activeDownloads > 0) {
         await new Promise(r => setTimeout(r, 1000));
     }
 
