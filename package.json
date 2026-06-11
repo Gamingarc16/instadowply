@@ -4,7 +4,6 @@
   "description": "Instagram Bulk Reels Grabber Script",
   "main": "android_grabber.js",
   "scripts": {
-    "setup": "",
     "start": "node android_grabber.js"
   },
   "keywords": [],
