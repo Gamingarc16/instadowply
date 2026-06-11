@@ -40,7 +40,7 @@ chmod +x ~/setup_grabber.sh
 
 * You can get the Session ID from signing in to instagram in [Kiwi Browser](https://play.google.com/store/apps/details?id=secure.unblock.unlimited.proxy.snap.hotspot.shield) and using cookie editor extension or by using a pc and finding it manually.
 
-  You can update the script by runing
+  You can update the script by running 
   ```
   ~/insta-bulk-grabber/Update.sh
   ```
@@ -53,4 +53,4 @@ chmod +x ~/setup_grabber.sh
 * Fixed a bug in the script in which the reels tab get stuck in 10-12 count
 * Improved download speed and added asynchronous downloads.
 * Added parallel downloading to up to 3 reels at a time
-* Added a Queue backlog file that get created when you Ctrl+c to interrupt the script
+* Added a Queue backlog file that get created when you Ctrl+C to interrupt the script
