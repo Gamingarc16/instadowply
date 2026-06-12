@@ -53,6 +53,8 @@ Open cmd and paste these
 mkdir insta-bulk-grabber
 cd insta-bulk-grabber
 curl -o windows_grabber.js https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/Windows/windows_grabber.js
+curl -o cookies.json https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/cookies.json
+curl -o package.json https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/Windows/package.json
 npm run setup
 ```
 # USE THIS WITH CAUTION 
