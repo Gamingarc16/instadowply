@@ -30,19 +30,19 @@ or
 [GitHub](https://github.com/termux/termux-app/releases)
 
 In Termux run these commands
-```
+```bash
 curl -o setup_grabber.sh https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/setup_grabber.sh
 chmod +x ~/setup_grabber.sh
 ~/setup_grabber.sh
 ```
 * If you want to you can add your Session Id and download count (how many reels to download in one session) later also , using
-```
+```bash
 ~/insta-bulk-grabber/configure.sh
 ```
 * You can get the Session ID from signing in to instagram in [Kiwi Browser](https://play.google.com/store/apps/details?id=secure.unblock.unlimited.proxy.snap.hotspot.shield) and using cookie editor extension or by using a pc and finding it manually.
 * 
 You can update the script by running 
-  ```
+  ```bash
   ~/insta-bulk-grabber/Update.sh
   ```
    ## Windows
