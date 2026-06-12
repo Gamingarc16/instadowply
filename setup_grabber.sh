@@ -28,6 +28,7 @@ cd ~/insta-bulk-grabber
 curl -o android_grabber.js https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/android_grabber.js
 curl -o cookies.json https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/cookies.json
 curl -o package.json https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/package.json
+curl -o package-lock.json https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/package-lock.json
 curl -o configure.sh https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/configure.sh
 curl -o Update.sh https://raw.githubusercontent.com/Gamingarc16/instadowply/refs/heads/main/Update.sh
 
